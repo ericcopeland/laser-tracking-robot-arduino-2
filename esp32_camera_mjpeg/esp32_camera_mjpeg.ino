@@ -89,9 +89,9 @@ void handle_control(void) {
       .landmine_top = doc["nearest_landmine"]["position"]["top"],
       .landmine_stop_distance = doc["nearest_landmine"]["stop_distance"]
     };
-    
+
     int max_speed = 220;
-    int min_speed = 170;
+    int min_speed = 180;
     int speed_diff = max_speed - min_speed;
     int turn_speed = 0;
     double error = 0;
@@ -103,7 +103,6 @@ void handle_control(void) {
     else if (post_data.landmine_top >= post_data.landmine_stop_distance) {
       ledcWrite(MPWM_LEFT_CHANNEL, 0);
       ledcWrite(MPWM_RIGHT_CHANNEL, 0);
-      Serial.println("STOP FOR LANDMINE");
     }
     else if (post_data.laser_left == 0 && post_data.laser_top == 0) {
       ledcWrite(MPWM_LEFT_CHANNEL, 0);
@@ -123,7 +122,7 @@ void handle_control(void) {
       error = abs(post_data.center_right_line - post_data.laser_left);
       turn_speed = (error / post_data.center_left_line) * speed_diff;
       ledcWrite(MPWM_LEFT_CHANNEL, max_speed);
-      ledcWrite(MPWM_RIGHT_CHANNEL, max_speed + turn_speed);
+      ledcWrite(MPWM_RIGHT_CHANNEL, min_speed + turn_speed);
     }
     else {
       digitalWrite(MDIR_LEFT, HIGH);
@@ -140,10 +139,16 @@ void handle_control(void) {
     
     DynamicJsonDocument return_doc(512);
     return_doc["status"] = "OK";
+    return_doc["time_ms"] = millis();
     return_doc["current_distance"] = CURRENT_DISTANCE;
     return_doc["last_distance"] = LAST_DISTANCE;
     return_doc["turn_speed"] = turn_speed;
     return_doc["error"] = error;
+    return_doc["center_left_line"] = post_data.center_left_line;
+    return_doc["center_right_line"] = post_data.center_right_line;
+    return_doc["laser_left"] = post_data.laser_left;
+    return_doc["landmine_left"] = post_data.landmine_left;
+    return_doc["landmine_top"] = post_data.landmine_top;
     String buf;
     serializeJson(return_doc, buf);
     server.send(201, F("application/json"), buf);
@@ -172,9 +177,9 @@ void setup()
   pinMode(LANDMINE, OUTPUT);
 
   ledcSetup(MPWM_LEFT_CHANNEL, 5000, 8);
-  ledcAttachPin(MPWM_LEFT, 3);
+  ledcAttachPin(MPWM_LEFT, MPWM_LEFT_CHANNEL);
   ledcSetup(MPWM_RIGHT_CHANNEL, 5000, 8);
-  ledcAttachPin(MPWM_RIGHT, 2);
+  ledcAttachPin(MPWM_RIGHT, MPWM_RIGHT_CHANNEL);
 
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -276,7 +281,7 @@ void loop()
 {
   recvWithStartEndMarkers();
   server.handleClient();
-
+  
   if (millis() > LAST_REQUEST_TIMESTAMP + MAX_DELAY_MS) {
       ledcWrite(MPWM_LEFT_CHANNEL, 0);
       ledcWrite(MPWM_RIGHT_CHANNEL, 0);
